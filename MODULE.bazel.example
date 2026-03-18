@@ -1,0 +1,75 @@
+"""
+Root MODULE.bazel — complete wiring example.
+
+The two-phase pattern:
+  Phase 1 (bazel sync / lazy fetch):
+    maven_wildcard_deps extension runs _resolve_wildcard_deps repository rule.
+    → Queries Maven search API for each wildcard dep.
+    → Writes @resolved_maven_deps_maven_deps_yaml//:resolved.bzl
+
+  Phase 2 (rules_jvm_external):
+    A thin glue repository rule loads resolved.bzl and calls maven_install.
+    → Coursier resolves full transitive graph.
+    → Artifacts downloaded to local cache or proxied through JFrog.
+
+WHY two phases and not one?
+  rules_jvm_external's Bzlmod extension does not accept dynamically computed
+  artifact lists — the maven.artifact() tags must be static at MODULE.bazel
+  evaluation time. Our phase 1 writes a file; phase 2 loads it in a
+  repository_rule (which CAN do dynamic loading). This is the standard
+  pattern for computed dependency lists in Bzlmod.
+"""
+
+module(
+    name    = "my_project",
+    version = "0.0.0",
+)
+
+# ── Core build deps ────────────────────────────────────────────────────────────
+
+bazel_dep(name = "rules_jvm_external", version = "6.1")
+bazel_dep(name = "maven_wildcard_deps", version = "0.1.0")
+
+# ── Phase 1: resolve wildcards ─────────────────────────────────────────────────
+
+wildcard_maven = use_extension(
+    "@maven_wildcard_deps//extensions:defs.bzl",
+    "maven_wildcard_deps",
+)
+
+wildcard_maven.config(
+    manifest         = "//:maven_deps.yaml",
+    # Override to search your internal Nexus/JFrog search endpoint:
+    # search_base_url  = "https://nexus.example.com/service/rest/v1/search",
+    #
+    # Override to download artifacts from JFrog instead of Central:
+    offline_repo_url = "https://artifactory.example.com/artifactory/libs-release",
+    fetch_sources    = True,
+    fetch_javadoc    = False,
+    fail_on_missing  = True,
+)
+
+# This makes @resolved_maven_deps_maven_deps_yaml available as a repo.
+use_repo(wildcard_maven, "resolved_maven_deps_maven_deps_yaml")
+
+# ── Phase 2: feed resolved GAVs into rules_jvm_external ───────────────────────
+#
+# rules_jvm_external's Bzlmod extension expects static maven.artifact() tags.
+# Since our list is dynamic (computed in phase 1), we use a glue repository
+# rule defined in //extensions:maven_install_glue.bzl that:
+#   1. Loads @resolved_maven_deps_maven_deps_yaml//:resolved.bzl at rule time
+#   2. Calls maven_install() with the resolved list
+#
+# See extensions/maven_install_glue.bzl for implementation.
+
+maven_glue = use_extension(
+    "@maven_wildcard_deps//extensions:maven_install_glue.bzl",
+    "maven_install_from_resolved",
+)
+
+maven_glue.install(
+    resolved_repo = "@resolved_maven_deps_maven_deps_yaml",
+    maven_repo_name = "maven",
+)
+
+use_repo(maven_glue, "maven")

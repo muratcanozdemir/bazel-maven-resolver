@@ -1,0 +1,62 @@
+# maven_deps.yaml
+#
+# Dependency manifest for maven_wildcard_deps Bazel module extension.
+#
+# Version field supports:
+#   "X.Y.*"       — latest in [X.Y.0, X.Y+1.0)
+#   "X.*"         — latest in [X.0.0, X+1.0.0)
+#   "X.Y.Z"       — exact version, no resolution
+#
+# search_url supports:
+#   https://search.maven.org/artifact/<group>/<artifact>
+#   https://search.maven.org/search?q=g:<group>+AND+a:<artifact>
+
+settings:
+  # Artifact downloads go through JFrog (not Maven Central).
+  # The search/resolve step still queries search.maven.org at `bazel sync` time.
+  offline_repo: "https://artifactory.example.com/artifactory/libs-release"
+  fetch_sources: true
+  fetch_javadoc: false
+  # Global default: skip -alpha, -beta, -RC, -SNAPSHOT versions
+  exclude_prerelease: true
+
+repositories:
+  - id: central
+    url: https://repo1.maven.org/maven2/
+  - id: jfrog
+    url: https://artifactory.example.com/artifactory/libs-release
+
+dependencies:
+  # Jackson — wildcard on patch version
+  - name: jackson-databind
+    search_url: https://search.maven.org/artifact/com.fasterxml.jackson.core/jackson-databind
+    version: "2.15.*"
+
+  - name: jackson-core
+    search_url: https://search.maven.org/artifact/com.fasterxml.jackson.core/jackson-core
+    version: "2.15.*"
+
+  - name: jackson-annotations
+    search_url: https://search.maven.org/artifact/com.fasterxml.jackson.core/jackson-annotations
+    version: "2.15.*"
+
+  # SLF4J — wildcard on minor+patch
+  - name: slf4j-api
+    search_url: https://search.maven.org/search?q=g:org.slf4j+AND+a:slf4j-api
+    version: "2.*"
+
+  # Logback — exact version (no wildcard)
+  - name: logback-classic
+    search_url: https://search.maven.org/artifact/ch.qos.logback/logback-classic
+    version: "1.4.11"
+
+  # Commons Lang — wildcard on patch
+  - name: commons-lang3
+    search_url: https://search.maven.org/artifact/org.apache.commons/commons-lang3
+    version: "3.12.*"
+
+  # Guava — allow prereleases for this one dep (overrides global setting)
+  - name: guava
+    search_url: https://search.maven.org/artifact/com.google.guava/guava
+    version: "32.*"
+    exclude_prerelease: false
