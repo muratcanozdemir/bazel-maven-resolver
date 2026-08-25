@@ -66,6 +66,6 @@ jobs:
         with:
           path: ~/.cache/bazel
           key: bazel-e2e-${{ runner.os }}-${{ hashFiles('e2e/MODULE.bazel', 'e2e/MODULE.bazel.lock') }}
-      - name: e2e consumer build (full Bzlmod pipeline: search -> resolve -> maven_install -> javac)
+      - name: 'e2e consumer build full Bzlmod pipeline: search -> resolve -> maven_install -> javac'
         working-directory: e2e
         run: bazel build //:smoke
