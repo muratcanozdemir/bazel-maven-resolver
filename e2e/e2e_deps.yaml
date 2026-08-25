@@ -1,0 +1,15 @@
+# Deliberately tiny manifest: one wildcard dep + one exact dep, chosen for
+# small download size, just enough to exercise both resolution paths.
+settings:
+  fetch_sources: false
+  fetch_javadoc: false
+  exclude_prerelease: true
+
+dependencies:
+  - name: slf4j-api
+    search_url: https://search.maven.org/artifact/org.slf4j/slf4j-api
+    version: "2.0.*"
+
+  - name: slf4j-nop
+    search_url: https://search.maven.org/artifact/org.slf4j/slf4j-nop
+    version: "2.0.16"

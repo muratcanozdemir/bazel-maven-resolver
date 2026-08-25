@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  format:
+    name: buildifier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install buildifier
+        run: |
+          curl -sL -o /usr/local/bin/buildifier \
+            https://github.com/bazelbuild/buildtools/releases/latest/download/buildifier-linux-amd64
+          chmod +x /usr/local/bin/buildifier
+      - name: Check formatting
+        run: |
+          buildifier -mode=check -lint=off $(find . -name '*.bzl' -o -name 'BUILD.bazel' -o -name 'MODULE.bazel' -o -name 'MODULE.bazel.example')
+
+  # Pure-Starlark and pure-Python logic — no network, no I/O. These are the
+  # golden tests and must never be flaky.
+  unit-tests:
+    name: bazel test (unit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bazelisk
+        run: |
+          curl -sL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
+      - name: bazel test //tests/...
+        run: bazel test //tests:versions_tests //tests:maven_search_url_tests
+      - name: python golden tests
+        run: python3 tests/test_version_logic.py -v
+
+  # Hits live Maven Central (search API + Coursier download). Not required
+  # to pass — Maven Central flakiness or rate limiting shouldn't block
+  # unrelated changes (see README's "ctx.execute not hermetic" caveat) —
+  # but it does need to run so breakage doesn't go unnoticed indefinitely.
+  live-integration:
+    name: live Maven Central smoke test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install pyyaml
+      - name: python smoke test (root manifest)
+        run: python3 tests/integration_smoke.py
+      - name: Install bazelisk
+        run: |
+          curl -sL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-e2e-${{ runner.os }}-${{ hashFiles('e2e/MODULE.bazel', 'e2e/MODULE.bazel.lock') }}
+      - name: e2e consumer build (full Bzlmod pipeline: search -> resolve -> maven_install -> javac)
+        working-directory: e2e
+        run: bazel build //:smoke

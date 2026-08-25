@@ -50,8 +50,8 @@ Design notes
 ──────────────────────────────────────────────────────────────────────────
 """
 
-load("//extensions:versions.bzl", "versions")
 load("//extensions:maven_search.bzl", "maven_search")
+load("//extensions:versions.bzl", "versions")
 load("//extensions:yaml_manifest.bzl", "yaml_manifest")
 
 # ─── Tag classes ──────────────────────────────────────────────────────────────
@@ -95,6 +95,13 @@ _config_tag = tag_class(
                 "wildcard range. If False, skip silently with a warning."
             ),
         ),
+        "max_search_rows": attr.int(
+            default = 200,
+            doc = (
+                "Rows per page requested from the Maven search API " +
+                "(hard ceiling is 200 per the API docs)."
+            ),
+        ),
     },
     doc = "Configure the wildcard Maven dependency resolver.",
 )
@@ -114,16 +121,17 @@ def _resolve_wildcard_deps_impl(ctx):
     manifest = yaml_manifest.parse(ctx, ctx.attr.manifest)
 
     # Effective settings: tag attrs override YAML settings
-    offline_repo   = ctx.attr.offline_repo_url or manifest.settings.offline_repo
-    fetch_sources  = ctx.attr.fetch_sources
-    fetch_javadoc  = ctx.attr.fetch_javadoc
+    offline_repo = ctx.attr.offline_repo_url or manifest.settings.offline_repo
+    fetch_sources = ctx.attr.fetch_sources
+    fetch_javadoc = ctx.attr.fetch_javadoc
     fail_on_missing = ctx.attr.fail_on_missing
-    search_base    = ctx.attr.search_base_url
+    search_base = ctx.attr.search_base_url
+    max_search_rows = ctx.attr.max_search_rows
 
     resolved = []  # list of "group:artifact:version" strings
 
     for dep in manifest.dependencies:
-        ga    = maven_search.parse_url(dep.search_url)
+        ga = maven_search.parse_url(dep.search_url)
         group = ga.group
         artifact = ga.artifact
         version_glob = dep.version_glob
@@ -138,9 +146,10 @@ def _resolve_wildcard_deps_impl(ctx):
 
         all_versions = maven_search.fetch_versions(
             ctx,
-            group    = group,
+            group = group,
             artifact = artifact,
             maven_base_url = search_base,
+            max_rows = max_search_rows,
         )
 
         best = versions.latest_in_range(
@@ -152,7 +161,11 @@ def _resolve_wildcard_deps_impl(ctx):
         if best == None:
             msg = (
                 "No version of {}:{} matched glob '{}' (exclude_prerelease={}). ".format(
-                    group, artifact, version_glob, dep.exclude_prerelease) +
+                    group,
+                    artifact,
+                    version_glob,
+                    dep.exclude_prerelease,
+                ) +
                 "Available versions (first 10): {}".format(all_versions[:10])
             )
             if fail_on_missing:
@@ -194,9 +207,9 @@ FETCH_SOURCES = {sources}
 FETCH_JAVADOC = {javadoc}
 """.format(
         artifacts = artifacts_literal,
-        repos     = repos_literal,
-        sources   = "True" if fetch_sources else "False",
-        javadoc   = "True" if fetch_javadoc else "False",
+        repos = repos_literal,
+        sources = "True" if fetch_sources else "False",
+        javadoc = "True" if fetch_javadoc else "False",
     )
 
     ctx.file("resolved.bzl", resolved_bzl)
@@ -215,10 +228,11 @@ _resolve_wildcard_deps = repository_rule(
         ),
         "search_base_url": attr.string(default = "https://search.maven.org"),
         "offline_repo_url": attr.string(default = ""),
-        "fetch_sources":    attr.bool(default = True),
-        "fetch_javadoc":    attr.bool(default = False),
-        "fail_on_missing":  attr.bool(default = True),
-    ),
+        "fetch_sources": attr.bool(default = True),
+        "fetch_javadoc": attr.bool(default = False),
+        "fail_on_missing": attr.bool(default = True),
+        "max_search_rows": attr.int(default = 200),
+    },
     # Mark non-hermetic: this rule intentionally makes network calls.
     # Bazel will re-run it on `bazel sync` or when manifest changes.
     local = False,
@@ -248,13 +262,14 @@ def _maven_wildcard_deps_impl(mctx):
             )
 
             _resolve_wildcard_deps(
-                name            = repo_name,
-                manifest        = tag.manifest,
+                name = repo_name,
+                manifest = tag.manifest,
                 search_base_url = tag.search_base_url,
                 offline_repo_url = tag.offline_repo_url,
-                fetch_sources   = tag.fetch_sources,
-                fetch_javadoc   = tag.fetch_javadoc,
+                fetch_sources = tag.fetch_sources,
+                fetch_javadoc = tag.fetch_javadoc,
                 fail_on_missing = tag.fail_on_missing,
+                max_search_rows = tag.max_search_rows,
             )
 
     # The resolved.bzl files are now available as
@@ -264,7 +279,7 @@ def _maven_wildcard_deps_impl(mctx):
 
 maven_wildcard_deps = module_extension(
     implementation = _maven_wildcard_deps_impl,
-    tag_classes    = {"config": _config_tag},
+    tag_classes = {"config": _config_tag},
     doc = (
         "Resolves wildcard Maven versions from a YAML manifest and registers " +
         "them for use with rules_jvm_external."

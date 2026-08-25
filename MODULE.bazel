@@ -1,0 +1,21 @@
+"""
+maven_wildcard_deps — a Bazel Bzlmod module extension that resolves
+wildcard Maven version globs (e.g. "2.15.*") from a YAML manifest and
+feeds the resolved, pinned GAVs into rules_jvm_external.
+
+This MODULE.bazel is the module's own identity file. Consumers depend on
+this module via `bazel_dep(name = "maven_wildcard_deps", version = "...")`
+(see MODULE.bazel.example for the consumer-side wiring). The bazel_deps
+below are needed to build and test *this* module's own code — the
+extensions/ load path (@rules_jvm_external//:defs.bzl) requires
+rules_jvm_external to be resolvable even when this repo is built
+standalone (e.g. in CI, via `bazel test //...`).
+"""
+
+module(
+    name = "maven_wildcard_deps",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_jvm_external", version = "6.7")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")

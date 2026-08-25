@@ -20,12 +20,6 @@ settings:
   # Global default: skip -alpha, -beta, -RC, -SNAPSHOT versions
   exclude_prerelease: true
 
-repositories:
-  - id: central
-    url: https://repo1.maven.org/maven2/
-  - id: jfrog
-    url: https://artifactory.example.com/artifactory/libs-release
-
 dependencies:
   # Jackson — wildcard on patch version
   - name: jackson-databind
