@@ -25,28 +25,36 @@ import urllib.request
 # ── Inline Python equivalents of the Starlark logic ──────────────────────────
 
 def parse_url(url: str) -> tuple[str, str]:
-    """Mirrors maven_search._parse_search_url in Starlark."""
-    url_clean = url.split("#")[0]
+    """Mirrors maven_search._parse_search_url in Starlark (extensions/maven_search.bzl).
+
+    Keep this in sync with that function — see tests/versions_test.bzl and
+    tests/test_version_logic.py for the shared golden-vector convention.
+    """
+    path_part = url
+    for sep in ["?", "#"]:
+        path_part = path_part.split(sep)[0]
 
     group = artifact = None
 
-    if "/artifact/" in url_clean:
-        after = url_clean.split("/artifact/", 1)[1]
+    if "/artifact/" in path_part:
+        after = path_part.split("/artifact/", 1)[1]
         parts = after.split("/")
         if len(parts) >= 2:
             group = parts[0]
-            artifact = parts[1].split("?")[0]
+            artifact = parts[1]
 
     if not group:
-        q = url_clean.replace("g%3A", "g:").replace("a%3A", "a:")
+        # Search the whole URL (not path_part) — the legacy hash-fragment
+        # form encodes g:/a: after the "#", which path_part just stripped.
+        q = url.replace("g%3A", "g:").replace("a%3A", "a:")
         if "g:" in q:
             after_g = q.split("g:", 1)[1]
-            for sep in ["+", "&", " ", '"', "'"]:
+            for sep in ["+", "&", " "]:
                 after_g = after_g.split(sep)[0]
             group = after_g.strip().strip('"').strip("'")
         if "a:" in q:
             after_a = q.split("a:", 1)[1]
-            for sep in ["+", "&", " ", '"', "'"]:
+            for sep in ["+", "&", " "]:
                 after_a = after_a.split(sep)[0]
             artifact = after_a.strip().strip('"').strip("'")
 

@@ -1,0 +1,8 @@
+load(":maven_search_test.bzl", "maven_search_test_suite")
+load(":versions_test.bzl", "versions_test_suite")
+
+# Pure-Starlark golden tests — no network, no I/O. Run with:
+#   bazel test //tests:versions_tests //tests:maven_search_url_tests
+versions_test_suite()
+
+maven_search_test_suite()

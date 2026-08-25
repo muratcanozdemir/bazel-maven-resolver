@@ -1,0 +1,51 @@
+"""
+Live end-to-end consumer test for maven_wildcard_deps.
+
+This is a SEPARATE Bazel workspace (its own MODULE.bazel) nested inside the
+maven_wildcard_deps repo, using local_path_override to depend on the parent
+module exactly the way a real external consumer would via bazel_dep. Run
+from this directory:
+
+  cd e2e && bazel build //... && bazel query @maven//...
+
+This exercises the full pipeline for real: YAML parsing, live Maven Central
+search, version-range resolution, resolved.bzl generation, and the
+maven_install_glue hand-off into rules_jvm_external/Coursier. It requires
+network access and is NOT run as part of `bazel test //...` at the repo
+root — see .github/workflows/ci.yml for how CI runs it as a separate,
+non-blocking job.
+"""
+
+module(
+    name = "maven_wildcard_deps_e2e",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "maven_wildcard_deps", version = "0.1.0")
+local_path_override(
+    module_name = "maven_wildcard_deps",
+    path = "..",
+)
+
+bazel_dep(name = "rules_jvm_external", version = "6.7")
+bazel_dep(name = "rules_java", version = "9.1.0")
+
+wildcard_maven = use_extension(
+    "@maven_wildcard_deps//extensions:defs.bzl",
+    "maven_wildcard_deps",
+)
+wildcard_maven.config(
+    fail_on_missing = True,
+    manifest = "//:e2e_deps.yaml",
+)
+use_repo(wildcard_maven, "resolved_maven_deps_e2e_deps_yaml")
+
+maven_glue = use_extension(
+    "@maven_wildcard_deps//extensions:maven_install_glue.bzl",
+    "maven_install_from_resolved",
+)
+maven_glue.install(
+    maven_repo_name = "maven",
+    resolved_bzl = "@resolved_maven_deps_e2e_deps_yaml//:resolved.bzl",
+)
+use_repo(maven_glue, "maven")

@@ -1,0 +1,10 @@
+load("@rules_java//java:defs.bzl", "java_library")
+
+java_library(
+    name = "smoke",
+    srcs = ["Smoke.java"],
+    deps = [
+        "@maven//:org_slf4j_slf4j_api",
+        "@maven//:org_slf4j_slf4j_nop",
+    ],
+)

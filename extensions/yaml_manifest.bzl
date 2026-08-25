@@ -7,12 +7,6 @@ json.decode() (available since Bazel 4.x).
 
 Expected YAML schema:
 
-  repositories:
-    - id: central
-      url: https://search.maven.org        # used as maven_base_url for search
-    - id: jfrog
-      url: https://artifactory.example.com/artifactory/libs-release
-
   dependencies:
     - name: jackson-databind               # human label, used in error messages
       search_url: https://search.maven.org/artifact/com.fasterxml.jackson.core/jackson-databind
@@ -34,8 +28,10 @@ Expected YAML schema:
     exclude_prerelease: true               # global default; per-dep overrides this
 
 Notes:
-  - `repositories` is optional; only `offline_repo` in settings is used for
-    maven.install() target URL.
+  - Repository configuration is intentionally single-valued: `offline_repo`
+    in settings is the only repository fed to maven.install(). There is no
+    `repositories` list in this schema — Coursier resolution always uses
+    either that one offline mirror or Maven Central, never a merged set.
   - `version` supports "X.Y.*" glob only. Exact versions pass through unchanged.
   - Per-dep `exclude_prerelease` overrides global setting.
 """
@@ -84,7 +80,7 @@ def _parse_yaml(ctx, yaml_path):
     if "__error__" in data:
         fail(
             "YAML parsing failed: {}\n".format(data["__error__"]) +
-            "Fix: run `pip3 install pyyaml` on your build host, or add it to your toolchain."
+            "Fix: run `pip3 install pyyaml` on your build host, or add it to your toolchain.",
         )
 
     return data
@@ -107,7 +103,6 @@ def parse_manifest(ctx, yaml_label):
     Returns struct:
       .dependencies  - list of dep structs
       .settings      - settings struct
-      .repositories  - list of repo structs
     """
     yaml_path = str(ctx.path(yaml_label))
     data = _parse_yaml(ctx, yaml_path)
@@ -115,19 +110,11 @@ def parse_manifest(ctx, yaml_label):
     # --- settings ---
     raw_settings = data.get("settings", {})
     settings = struct(
-        offline_repo       = raw_settings.get("offline_repo", ""),
-        fetch_sources      = raw_settings.get("fetch_sources", True),
-        fetch_javadoc      = raw_settings.get("fetch_javadoc", False),
+        offline_repo = raw_settings.get("offline_repo", ""),
+        fetch_sources = raw_settings.get("fetch_sources", True),
+        fetch_javadoc = raw_settings.get("fetch_javadoc", False),
         exclude_prerelease = raw_settings.get("exclude_prerelease", True),
     )
-
-    # --- repositories ---
-    repos = []
-    for r in data.get("repositories", []):
-        repos.append(struct(
-            id  = r.get("id", ""),
-            url = r.get("url", ""),
-        ))
 
     # --- dependencies ---
     deps = []
@@ -135,9 +122,9 @@ def parse_manifest(ctx, yaml_label):
     for idx, d in enumerate(raw_deps):
         _validate_dep(d, idx)
         deps.append(struct(
-            name               = d.get("name", "dep_{}".format(idx)),
-            search_url         = d["search_url"],
-            version_glob       = str(d["version"]),
+            name = d.get("name", "dep_{}".format(idx)),
+            search_url = d["search_url"],
+            version_glob = str(d["version"]),
             exclude_prerelease = d.get("exclude_prerelease", settings.exclude_prerelease),
         ))
 
@@ -146,8 +133,7 @@ def parse_manifest(ctx, yaml_label):
 
     return struct(
         dependencies = deps,
-        settings     = settings,
-        repositories = repos,
+        settings = settings,
     )
 
 # Public API

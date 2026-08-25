@@ -23,16 +23,27 @@ def _parse_version(version_str):
     # Detect and strip common pre-release qualifiers.
     # Starlark has no regex; use explicit suffix checks.
     prerelease_markers = [
-        "-SNAPSHOT", "-alpha", "-Alpha", "-ALPHA",
-        "-beta", "-Beta", "-BETA",
-        "-rc", "-RC", "-M", "-milestone",
-        ".alpha", ".beta", ".rc",
+        "-SNAPSHOT",
+        "-alpha",
+        "-Alpha",
+        "-ALPHA",
+        "-beta",
+        "-Beta",
+        "-BETA",
+        "-rc",
+        "-RC",
+        "-M",
+        "-milestone",
+        ".alpha",
+        ".beta",
+        ".rc",
     ]
     is_prerelease = False
     cleaned = raw
     for marker in prerelease_markers:
         if marker.lower() in cleaned.lower():
             is_prerelease = True
+
             # Strip from the marker onwards
             idx = cleaned.lower().find(marker.lower())
             cleaned = cleaned[:idx]
@@ -71,9 +82,17 @@ def glob_to_range(glob_str):
     """
     Convert a glob version string to a half-open [low, high) range.
 
-    "3.5.*"   -> low=[3,5,0], high=[3,6,0]
-    "3.*"     -> low=[3,0,0], high=[4,0,0]
-    "3.5.2.*" -> low=[3,5,2,0], high=[3,5,3,0]
+    "3.5.*"   -> low=[3,5,0], high=[3,6]
+    "3.*"     -> low=[3,0],   high=[4]
+    "3.5.2.*" -> low=[3,5,2,0], high=[3,5,3]
+
+    Note `low` and `high` are NOT padded to the same length as each other —
+    `low` always has one more component than the glob's fixed prefix, while
+    `high` has exactly as many components as the fixed prefix. This is fine
+    because `_version_cmp` (below) zero-pads the shorter side when
+    comparing, so e.g. high=[3,6] and high=[3,6,0] are equivalent bounds.
+    Don't rely on the list *lengths* meaning anything — only the
+    zero-padded numeric value matters.
 
     Non-glob strings (no "*") are returned as an exact match:
       low=parts, high=None (meaning exact)
@@ -94,6 +113,13 @@ def glob_to_range(glob_str):
 
     if parts[-1] != "*":
         fail("Wildcard '*' must be the final segment in version glob: '{}'".format(glob_str))
+
+    if len(parts) < 2:
+        fail(
+            "Version glob '{}' has no fixed segment before '*'. ".format(glob_str) +
+            "A bare '*' matches every version, which this range-based resolver " +
+            "cannot express. Use at least a major version, e.g. '3.*'.",
+        )
 
     # Parts before the wildcard are the base
     base = [int(p) for p in parts[:-1]]  # will fail on non-int — intentional
@@ -147,7 +173,8 @@ def latest_in_range(versions_list, range_struct, exclude_prerelease = True):
     versions_list - list of raw version strings from Maven API
     """
     candidates = [
-        v for v in versions_list
+        v
+        for v in versions_list
         if version_in_range(v, range_struct, exclude_prerelease)
     ]
 
