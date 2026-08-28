@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: bazel-maven-resolver
+  description: Bazel Bzlmod module extension that resolves wildcard Maven version globs from a YAML manifest against Maven Central, feeding pinned GAVs into rules_jvm_external.
+  tags: [bazel, starlark, python, maven, build-tooling]
+  annotations:
+    github.com/project-slug: muratcanozdemir/bazel-maven-resolver
+    backstage.io/techdocs-ref: dir:.
+spec:
+  type: library
+  owner: user:default/muratcanozdemir
+  lifecycle: experimental
